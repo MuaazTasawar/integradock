@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: integradock-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: integradock
+      POSTGRES_PASSWORD: integradock_dev_password
+      POSTGRES_DB: integradock
+    ports:
+      - "5432:5432"
+    volumes:
+      - integradock_pgdata:/var/lib/postgresql/data
+      - ./go-engine/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U integradock"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: integradock-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  go-engine:
+    build:
+      context: ./go-engine
+      dockerfile: Dockerfile
+    container_name: integradock-go-engine
+    restart: unless-stopped
+    env_file:
+      - ./go-engine/.env
+    environment:
+      DATABASE_URL: postgres://integradock:integradock_dev_password@postgres:5432/integradock?sslmode=disable
+      REDIS_URL: redis:6379
+      PY_PLANNER_URL: http://py-planner:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  py-planner:
+    build:
+      context: ./py-planner
+      dockerfile: Dockerfile
+    container_name: integradock-py-planner
+    restart: unless-stopped
+    env_file:
+      - ./py-planner/.env
+    environment:
+      GO_ENGINE_URL: http://go-engine:8080
+    ports:
+      - "8000:8000"
+    depends_on:
+      - go-engine
+
+  mock-api:
+    build:
+      context: ./mock-api
+      dockerfile: Dockerfile
+    container_name: integradock-mock-api
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: integradock-frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      - go-engine
+      - py-planner
+
+volumes:
+  integradock_pgdata:

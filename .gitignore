@@ -1,0 +1,41 @@
+# Go
+go-engine/bin/
+go-engine/tmp/
+*.exe
+*.test
+*.out
+
+# Python
+py-planner/__pycache__/
+py-planner/**/__pycache__/
+py-planner/.venv/
+py-planner/venv/
+py-planner/*.egg-info/
+py-planner/.pytest_cache/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# Env files
+.env
+*.env
+!*.env.example
+!.env.local.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker
+docker-compose.override.yml
