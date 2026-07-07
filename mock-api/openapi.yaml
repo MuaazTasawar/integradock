@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: IntegraDock Mock Inventory & Orders API
+  description: >
+    Sandbox API for IntegraDock demos. Exposes a small inventory of products
+    and an orders workflow. Reads are safe; creating and cancelling orders
+    are destructive actions and should require confirmation before an agent
+    executes them.
+  version: "1.0.0"
+servers:
+  - url: http://localhost:9090
+    description: Local sandbox server
+
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      summary: List all products in the catalog
+      responses:
+        "200":
+          description: Array of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      summary: Get a single product by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: prod_001
+      responses:
+        "200":
+          description: The product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Product not found
+
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List all orders
+      responses:
+        "200":
+          description: Array of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      summary: Place a new order (destructive - reduces stock)
+      x-destructive: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Product not found
+        "409":
+          description: Insufficient stock
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      summary: Get a single order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: ord_001
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Order not found
+    delete:
+      operationId: cancelOrder
+      summary: Cancel an existing order (destructive - restores stock)
+      x-destructive: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: ord_001
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Order not found
+        "409":
+          description: Order already cancelled
+
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sku:
+          type: string
+        price:
+          type: number
+          format: float
+        quantity:
+          type: integer
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        product_id:
+          type: string
+        quantity:
+          type: integer
+        status:
+          type: string
+          enum: [placed, cancelled]
+        created_at:
+          type: string
+          format: date-time
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - product_id
+        - quantity
+      properties:
+        product_id:
+          type: string
+          example: prod_001
+        quantity:
+          type: integer
+          example: 2
