@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import parse
+from app.routers import parse, plan
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("integradock.py-planner")
@@ -33,7 +33,7 @@ app.add_middleware(
 )
 
 app.include_router(parse.router)
-# app.include_router(plan.router)  # wired in Phase 5
+app.include_router(plan.router)
 
 
 @app.get("/health")
