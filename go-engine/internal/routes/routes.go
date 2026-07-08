@@ -17,7 +17,7 @@ type Deps struct {
 	InternalAPISecret string
 }
 
-// Register mounts all HTTP routes on the given Fiber app.
+// Register mounts all HTTP + websocket routes on the given Fiber app.
 func Register(app *fiber.App, deps Deps) {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
@@ -28,7 +28,9 @@ func Register(app *fiber.App, deps Deps) {
 
 	tenantHandler := handlers.NewTenantHandler(deps.DB)
 	toolHandler := handlers.NewToolHandler(deps.DB)
-	_ = executor.NewEngine(deps.DB) // wired into execution_handler in Phase 6
+	engine := executor.NewEngine(deps.DB)
+	executionHandler := handlers.NewExecutionHandler(deps.DB, deps.Redis, engine)
+	wsHandler := handlers.NewWebsocketHandler(deps.Redis)
 
 	api := app.Group("/api", appmiddleware.InternalAuth(deps.InternalAPISecret))
 
@@ -42,7 +44,20 @@ func Register(app *fiber.App, deps Deps) {
 	tools.Get("/", toolHandler.ListByTenant)
 	tools.Get("/:id", toolHandler.GetByID)
 
-	// Execution routes are attached in Phase 6 once redisstate + websocket
-	// streaming exist (execution_handler.go, websocket_handler.go).
-	_ = api.Group("/executions")
+	executions := api.Group("/executions")
+	executions.Post("/", executionHandler.CreateRun)
+	executions.Get("/:id", executionHandler.GetRun)
+	executions.Patch("/:id", executionHandler.UpdateRunStatus)
+	executions.Post("/:id/steps", executionHandler.CreateStep)
+	executions.Post("/:id/steps/:step_id/execute", executionHandler.ExecuteStep)
+	executions.Post("/:id/steps/:step_id/confirm", executionHandler.ConfirmStep)
+
+	// Websocket streaming is intentionally outside the /api InternalAuth group -
+	// the frontend connects directly from the browser and cannot attach a
+	// custom X-Internal-Secret header during the WS handshake. run_id acts as
+	// the bearer token for the demo; add a signed short-lived ws ticket before
+	// any real multi-tenant deployment.
+	ws := app.Group("/ws")
+	ws.Use(handlers.UpgradeMiddleware)
+	ws.Get("/executions/:run_id", wsHandler.StreamExecution())
 }
