@@ -23,10 +23,34 @@ from app.config import get_settings
 logger = logging.getLogger("integradock.llm_client")
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-flash-latest"
 
 MAX_TOKENS = 1024
 
+def _sanitize_schema_for_gemini(schema: dict[str, Any]) -> dict[str, Any]:
+    """
+    Gemini's function-calling schema is stricter than plain JSON Schema and
+    rejects fields like 'example'. Recursively strips unsupported keys so the
+    same parameters_schema (built for Anthropic-style tool defs) also works
+    for Gemini.
+    """
+    if not isinstance(schema, dict):
+        return schema
+
+    ALLOWED_KEYS = {"type", "description", "properties", "required", "items", "enum"}
+    cleaned: dict[str, Any] = {}
+
+    for key, value in schema.items():
+        if key not in ALLOWED_KEYS:
+            continue
+        if key == "properties" and isinstance(value, dict):
+            cleaned[key] = {k: _sanitize_schema_for_gemini(v) for k, v in value.items()}
+        elif key == "items" and isinstance(value, dict):
+            cleaned[key] = _sanitize_schema_for_gemini(value)
+        else:
+            cleaned[key] = value
+
+    return cleaned
 
 class ToolCall(BaseModel):
     id: str
@@ -130,7 +154,7 @@ async def call_gemini(
         {
             "name": t["tool_name"],
             "description": t["description"] or t["tool_name"],
-            "parameters": t["parameters_schema"] or {"type": "object", "properties": {}},
+            "parameters": _sanitize_schema_for_gemini(t["parameters_schema"] or {"type": "object", "properties": {}}),
         }
         for t in tools
     ]
